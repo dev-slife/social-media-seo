@@ -149,6 +149,7 @@ def main():
         write_csv(name, data)
     for name, data in webData.items():
         webData[name] = filterColumn(columns_to_remove, filterCountry("United States", data))
+    for name, data in webData.items():
         output(name, data)
         write_csv(name, data)
 
