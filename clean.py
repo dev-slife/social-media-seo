@@ -1,7 +1,7 @@
 """
 Author: dev.slife
 Date Created: 10/16/2026
-Date Updated: 10/28/2026
+Date Updated: 11/6/2026
 Description:
     A python script used to help clean and restructure social media and web traffic datasets.
 """
@@ -22,7 +22,6 @@ RAW_DIR = "raw_data"
 CLEAN_DIR = "clean_data"
 OUTPUT_DIR = "output_data"
 STAT_TABLES = "stat_tables"
-PERC_LINKS = (("Male", "Female"), ("Age 25-34", "Age 35-44", "Age 45-54"))
 
 
 
@@ -88,15 +87,19 @@ def filterColumn(names: tuple, data: dict, remove: bool = True):
 
 def structData(data: dict, column: str):
     columns_to_remove = ("Bio Link Taps", "Followers", "Stories Created", "Posts Created")
+    links = {
+        "Male": ["Female"],
+        "Female": ["Male"],
+        "Age 25-34": ["Age 35-44", "Age 45-54"],
+        "Age 35-44": ["Age 25-34", "Age 45-54"],
+        "Age 45-54": ["Age 25-34", "Age 35-44"]
+    }
     filtered = filterColumn(columns_to_remove, data)
-    ignored = PERC_LINKS[0] if column in PERC_LINKS[0] \
-        else PERC_LINKS[1] if column in PERC_LINKS[1] \
-        else None
     newData = {}
     found, valid = column in filtered.keys(), filtered[column][0][-1] == '%'
     if (found and valid):
         for key in filtered.keys():
-            if ((ignored and key in ignored) or key == column): continue
+            if ((key == column) or (key in links.get(column, []))): continue
             for i in range(len(filtered[key])):
                 dec = (float(filtered[column][i][0:(len(filtered[column][i]) - 1)])) / 100
                 perc = True if (isinstance(filtered[key][i], str) and filtered[key][i][-1] == '%') else False
