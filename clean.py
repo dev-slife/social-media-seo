@@ -1,7 +1,7 @@
 """
 Author: dev.slife
 Date Created: 10/16/2026
-Date Updated: 10/26/2026
+Date Updated: 10/28/2026
 Description:
     A python script used to help clean and restructure social media and web traffic datasets.
 """
@@ -21,6 +21,8 @@ import pandas as pd
 RAW_DIR = "raw_data"
 CLEAN_DIR = "clean_data"
 OUTPUT_DIR = "output_data"
+STAT_TABLES = "stat_tables"
+PERC_LINKS = (("Male", "Female"), ("Age 25-34", "Age 35-44", "Age 45-54"))
 
 
 
@@ -51,13 +53,14 @@ def read_csv(filename: str, raw: bool = True):
     return data
 
 
-def write_csv(name: str, data: list):
-    path = os.path.join(CLEAN_DIR, name + ".csv")
-    if (not os.path.exists(CLEAN_DIR)):
-        print(f"Path does not exist, creating one: {CLEAN_DIR}")
-        os.mkdir(CLEAN_DIR)
-    df = pd.DataFrame(data)
-    df.to_csv(path, index=False)
+def write_csv(name: str, data: list | dict | pd.DataFrame, include_index: bool = False, stat_tables: bool = False):
+    root = STAT_TABLES if (stat_tables) else CLEAN_DIR
+    path = os.path.join(root, name + ".csv")
+    if (not os.path.exists(root)):
+        print(f"Path does not exist, creating one: {root}")
+        os.mkdir(root)
+    df = pd.DataFrame(data) if (isinstance(data, list) or isinstance(data, dict)) else data
+    df.to_csv(path, index=include_index)
 
 
 
@@ -86,14 +89,17 @@ def filterColumn(names: tuple, data: dict, remove: bool = True):
 def structData(data: dict, column: str):
     columns_to_remove = ("Bio Link Taps", "Followers", "Stories Created", "Posts Created")
     filtered = filterColumn(columns_to_remove, data)
+    ignored = PERC_LINKS[0] if column in PERC_LINKS[0] \
+        else PERC_LINKS[1] if column in PERC_LINKS[1] \
+        else None
     newData = {}
     found, valid = column in filtered.keys(), filtered[column][0][-1] == '%'
     if (found and valid):
         for key in filtered.keys():
-            if (key == column): continue
+            if ((ignored and key in ignored) or key == column): continue
             for i in range(len(filtered[key])):
                 dec = (float(filtered[column][i][0:(len(filtered[column][i]) - 1)])) / 100
-                perc = True if (filtered[key][i][-1] == '%') else False
+                perc = True if (isinstance(filtered[key][i], str) and filtered[key][i][-1] == '%') else False
                 val = (filtered[key][i][0:(len(filtered[key][i]) - 1)]) if (perc) \
                     else filtered[key][i]
                 try:
@@ -120,8 +126,45 @@ def map_data(raw_data: list):
             keys = [raw_data[0][j] for j in range(len(raw_data[0]))]
         else:
             for j in range(len(raw_data[i])):
-                data_map.setdefault(keys[j], []).append(raw_data[i][j])
+                data_map.setdefault(keys[j], []).append(soft_to_number(raw_data[i][j]))
     return data_map
+
+
+
+# ------------------------ STAT CALCULATIONS ------------------------ #
+
+def soft_to_number(string):
+    try:
+        return float(string)
+    except (ValueError, TypeError):
+        return string
+    
+
+def stat_summary(data: dict, columns: list, output_name: str = None):
+    df = pd.DataFrame(data)
+    summary = df[columns].describe()
+    print(summary)
+    if (output_name):
+        write_csv(output_name, summary, include_index=True, stat_tables=True)
+    return summary
+
+
+def avg_group(data: dict, group: list, stat_col: str, output_name: str = None):
+    df = pd.DataFrame(data)
+    dfGroup = df.groupby(group)[stat_col].mean()
+    print(dfGroup)
+    if (output_name):
+        write_csv(output_name, dfGroup, include_index=True, stat_tables=True)
+    return dfGroup
+
+
+def corr_test(data: dict, output_name: str = None):
+    df = pd.DataFrame(data)
+    dfCorr = df.corr(numeric_only=True)
+    print(dfCorr)
+    if (output_name):
+        write_csv(output_name, dfCorr, include_index=True, stat_tables=True)
+    return dfCorr
 
 
 
@@ -152,6 +195,10 @@ def main():
     for name, data in webData.items():
         output(name, data)
         write_csv(name, data)
+        
+    stat_summary(socialData["INSTAGRAM_RAW"], ["Total Views", "Profile Visits"], "INSTAGRAM_STAT_SUMMARY")
+    avg_group(socialData["INSTAGRAM_RAW"], ["Followers", "Bio Link Taps"], "Total Views", "INSTAGRAM_AVG_GROUP")
+    corr_test(socialData["INSTAGRAM_RAW"], "INSTAGRAM_CORRELATION_TABLE")
 
 
 if __name__ == "__main__":
